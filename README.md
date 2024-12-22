@@ -14,7 +14,7 @@ MODE_NETWORK=modeTestnet
 ```
 docker compose up
 ```
-* Frontend UI: http://localhost:3000/
+* Frontend UI: http://localhost:8080/
 * Restack UI: http://localhost:5233/
 
 ### Usage in Frontend UI
