@@ -237,8 +237,23 @@ async def run_locally(input: RunCodeInput) -> RunCodeOutput:
         if build_process.returncode != 0:
             return RunCodeOutput(output=build_process.stderr or build_process.stdout)
         
-        # Run the Docker container
-        run_cmd = ["docker", "run", "--rm", "myapp"]
+        # Collect environment variables we want to pass
+        # (Feel free to add or remove keys as needed.)
+        env_vars = {
+            "WALLET_PRIVATE_KEY": os.environ.get("WALLET_PRIVATE_KEY", ""),
+            "WALLET_ADDRESS": os.environ.get("WALLET_ADDRESS", ""),
+            "MODE_NETWORK": os.environ.get("MODE_NETWORK", ""),
+            "CROSSMINT_API_KEY": os.environ.get("CROSSMINT_API_KEY", "")
+        }
+        
+        # Construct a list of "-e KEY=VALUE" for each non-empty var
+        env_args = []
+        for key, val in env_vars.items():
+            if val:
+                env_args.extend(["-e", f"{key}={val}"])
+        
+        # Run the Docker container, injecting the environment variables
+        run_cmd = ["docker", "run", "--rm"] + env_args + ["myapp"]
         run_process = subprocess.run(run_cmd, capture_output=True, text=True)
         if run_process.returncode != 0:
             return RunCodeOutput(output=run_process.stderr or run_process.stdout)
