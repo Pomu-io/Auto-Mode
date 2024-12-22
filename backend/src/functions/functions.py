@@ -25,15 +25,19 @@ client = OpenAI(api_key=openai.api_key)
 # 1) GENERATE CODE SCHEMA
 #
 class GenerateCodeSchema(BaseModel):
+    """
+    Now only "dockerfile" is truly required for parsing;
+    all other fields are optional.
+    """
     dockerfile: str
-    readme_md: str
-    my_contract_sol: str
-    my_contract_test_js: str
-    deploy_js: str
-    hardhat_config_js: str
-    iterations_log: str
-    package_json: str
-    package_lock_json: str  # can be empty or minimal
+    readme_md: Optional[str] = None
+    my_contract_sol: Optional[str] = None
+    my_contract_test_js: Optional[str] = None
+    deploy_js: Optional[str] = None
+    hardhat_config_js: Optional[str] = None
+    iterations_log: Optional[str] = None
+    package_json: Optional[str] = None
+    package_lock_json: Optional[str] = None
 
     class Config:
         extra = "forbid"
@@ -50,17 +54,7 @@ class GenerateCodeSchema(BaseModel):
                 "package_json": {"type": "string"},
                 "package_lock_json": {"type": "string"}
             },
-            "required": [
-                "dockerfile",
-                "readme_md",
-                "my_contract_sol",
-                "my_contract_test_js",
-                "deploy_js",
-                "hardhat_config_js",
-                "iterations_log",
-                "package_json",
-                "package_lock_json"
-            ],
+            "required": ["dockerfile"],  # Only 'dockerfile' is required
             "additionalProperties": False
         }
 
@@ -68,6 +62,10 @@ class GenerateCodeSchema(BaseModel):
 # 2) VALIDATE OUTPUT SCHEMA
 #
 class ValidateOutputSchema(BaseModel):
+    """
+    'result' and 'dockerfile' remain required.
+    All others can be omitted or null.
+    """
     result: bool
     dockerfile: Optional[str] = None
     readme_md: Optional[str] = None
@@ -97,19 +95,10 @@ class ValidateOutputSchema(BaseModel):
             },
             "required": [
                 "result",
-                "dockerfile",
-                "readme_md",
-                "my_contract_sol",
-                "my_contract_test_js",
-                "deploy_js",
-                "hardhat_config_js",
-                "iterations_log",
-                "package_json",
-                "package_lock_json"
+                "dockerfile"  # We keep these 2 required in validation
             ],
             "additionalProperties": False
         }
-
 
 @dataclass
 class GenerateCodeInput:
@@ -118,6 +107,9 @@ class GenerateCodeInput:
 
 @dataclass
 class GenerateCodeOutput:
+    """
+    We store the final strings, or empty if missing.
+    """
     dockerfile: str
     readme_md: str
     my_contract_sol: str
@@ -138,13 +130,14 @@ async def generate_code(input: GenerateCodeInput) -> GenerateCodeOutput:
     )
 
     completion = client.beta.chat.completions.parse(
-        model="gpt-4o-2024-08-06",
+        model="gpt-4",
         messages=[
             {
                 "role": "system",
                 "content": (
                     "You are the initial of an autonomous coding assistant agent. "
-                    "Generate a fully valid Hardhat project plus iteration logs."
+                    "Generate code according to the user's instructions. "
+                    "Return valid JSON only."
                 )
             },
             {"role": "user", "content": prompt}
@@ -155,18 +148,20 @@ async def generate_code(input: GenerateCodeInput) -> GenerateCodeOutput:
     result = completion.choices[0].message
     if result.refusal:
         raise RuntimeError("Model refused to generate code.")
+
     data = result.parsed
 
+    # For any field that is None, store an empty string.
     return GenerateCodeOutput(
         dockerfile=data.dockerfile,
-        readme_md=data.readme_md,
-        my_contract_sol=data.my_contract_sol,
-        my_contract_test_js=data.my_contract_test_js,
-        deploy_js=data.deploy_js,
-        hardhat_config_js=data.hardhat_config_js,
-        iterations_log=data.iterations_log,
-        package_json=data.package_json,
-        package_lock_json=data.package_lock_json
+        readme_md=data.readme_md or "",
+        my_contract_sol=data.my_contract_sol or "",
+        my_contract_test_js=data.my_contract_test_js or "",
+        deploy_js=data.deploy_js or "",
+        hardhat_config_js=data.hardhat_config_js or "",
+        iterations_log=data.iterations_log or "",
+        package_json=data.package_json or "",
+        package_lock_json=data.package_lock_json or ""
     )
 
 #
@@ -193,57 +188,56 @@ async def run_locally(input: RunCodeInput) -> RunCodeOutput:
     log.info("run_locally started", input=input)
     
     with tempfile.TemporaryDirectory() as temp_dir:
-        # 1) Dockerfile
+        # 1) Dockerfile is guaranteed non-empty
         dockerfile_path = os.path.join(temp_dir, "Dockerfile")
         with open(dockerfile_path, "w", encoding="utf-8") as df:
             df.write(input.dockerfile)
 
-        # 2) readme.md
+        # 2) readme.md (could be empty)
         with open(os.path.join(temp_dir, "readme.md"), "w", encoding="utf-8") as f:
             f.write(input.readme_md)
 
-        # 3) contracts/MyContract.sol
+        # 3) contracts/MyContract.sol (could be empty)
         contracts_dir = os.path.join(temp_dir, "contracts")
         os.makedirs(contracts_dir, exist_ok=True)
         with open(os.path.join(contracts_dir, "MyContract.sol"), "w", encoding="utf-8") as f:
             f.write(input.my_contract_sol)
 
-        # 4) test/my_contract_test.js
+        # 4) test/my_contract_test.js (could be empty)
         test_dir = os.path.join(temp_dir, "test")
         os.makedirs(test_dir, exist_ok=True)
         with open(os.path.join(test_dir, "my_contract_test.js"), "w", encoding="utf-8") as f:
             f.write(input.my_contract_test_js)
 
-        # 5) scripts/deploy.js
+        # 5) scripts/deploy.js (could be empty)
         scripts_dir = os.path.join(temp_dir, "scripts")
         os.makedirs(scripts_dir, exist_ok=True)
         with open(os.path.join(scripts_dir, "deploy.js"), "w", encoding="utf-8") as f:
             f.write(input.deploy_js)
 
-        # 6) hardhat.config.js
+        # 6) hardhat.config.js (could be empty)
         with open(os.path.join(temp_dir, "hardhat.config.js"), "w", encoding="utf-8") as f:
             f.write(input.hardhat_config_js)
 
-        # 7) iterations.log
+        # 7) iterations.log (could be empty)
         with open(os.path.join(temp_dir, "iterations.log"), "w", encoding="utf-8") as f:
             f.write(input.iterations_log)
 
-        # 8) package.json
+        # 8) package.json (could be empty)
         with open(os.path.join(temp_dir, "package.json"), "w", encoding="utf-8") as f:
             f.write(input.package_json)
 
-        # 9) package-lock.json (can be empty or minimal)
+        # 9) package-lock.json (could be empty)
         with open(os.path.join(temp_dir, "package-lock.json"), "w", encoding="utf-8") as f:
             f.write(input.package_lock_json)
 
-         # Build the Docker image
+        # Build the Docker image
         build_cmd = ["docker", "build", "-t", "myapp", temp_dir]
         build_process = subprocess.run(build_cmd, capture_output=True, text=True)
         if build_process.returncode != 0:
             return RunCodeOutput(output=build_process.stderr or build_process.stdout)
         
-        # Collect environment variables we want to pass
-        # (Feel free to add or remove keys as needed.)
+        # Pass environment variables to the container if needed
         env_vars = {
             "WALLET_PRIVATE_KEY": os.environ.get("WALLET_PRIVATE_KEY", ""),
             "WALLET_ADDRESS": os.environ.get("WALLET_ADDRESS", ""),
@@ -251,13 +245,12 @@ async def run_locally(input: RunCodeInput) -> RunCodeOutput:
             "CROSSMINT_API_KEY": os.environ.get("CROSSMINT_API_KEY", "")
         }
         
-        # Construct a list of "-e KEY=VALUE" for each non-empty var
         env_args = []
         for key, val in env_vars.items():
             if val:
                 env_args.extend(["-e", f"{key}={val}"])
         
-        # Run the Docker container, injecting the environment variables
+        # Run the Docker container
         run_cmd = ["docker", "run", "--rm"] + env_args + ["myapp"]
         run_process = subprocess.run(run_cmd, capture_output=True, text=True)
         if run_process.returncode != 0:
@@ -314,7 +307,7 @@ async def validate_output(input: ValidateOutputInput) -> ValidateOutputOutput:
     )
 
     completion = client.beta.chat.completions.parse(
-        model="gpt-4o-2024-08-06",
+        model="gpt-4",
         messages=[
             {
                 "role": "system",
