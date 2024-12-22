@@ -1,69 +1,56 @@
-#PROBLEM IS THAT RESTACK ENGINE RUNS ON localhost instead of 0.0.0.0 
-# which means that the other docker containers in the network cannot access it.
-# I have a working docker-compose.yml on "working-linux-only" branch, but it only works on linux operating systems
+# ./docker-compose.yml
+
 services:
   restack-engine:
     image: ghcr.io/restackio/restack:main
     container_name: restack
-    environment:
-      - RESTACK_ENGINE_ADDRESS=0.0.0.0:6233  # Ensure engine binds to 0.0.0.0
-    ports:
-      - "5233:5233" # GUI
-      - "6233:6233" # RPC
-      - "7233:7233" # Temporal
     restart: always
-    networks:
-      - restack-network
+    network_mode: host
+    # environment:
+    #   - OPTIONAL_ENV_VAR=...
 
   docker-dind:
     image: docker:24-dind
     privileged: true
     command: ["dockerd", "--host=tcp://0.0.0.0:2375", "--tls=false"]
-    ports:
-      - "2375:2375"
-    networks:
-      - restack-network
+    network_mode: host
 
   backend:
     build: ./backend
     environment:
       - OPENAI_KEY=${OPENAI_KEY}
-      - DOCKER_HOST=tcp://docker-dind:2375
-      - RESTACK_ENGINE_ADDRESS=restack-engine:6233
+      - DOCKER_HOST=tcp://localhost:2375
+      - RESTACK_ENGINE_ADDRESS=localhost:6233
+      - WALLET_PRIVATE_KEY=${WALLET_PRIVATE_KEY}
+      - WALLET_ADDRESS=${WALLET_ADDRESS}
+      - MODE_NETWORK=${MODE_NETWORK}
+      # Add additional environment variables as needed
     depends_on:
       - restack-engine
       - docker-dind
-    ports:
-      - "8000:8000"
     command: ["poetry", "run", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
-    networks:
-      - restack-network
+    network_mode: host
 
   worker:
     build: ./backend
     environment:
       - OPENAI_KEY=${OPENAI_KEY}
-      - DOCKER_HOST=tcp://docker-dind:2375
-      - RESTACK_ENGINE_ADDRESS=restack-engine:6233
-      - RESTACK_TEMPORAL_ADDRESS=restack-engine:7233
+      - DOCKER_HOST=tcp://localhost:2375
+      - RESTACK_ENGINE_ADDRESS=localhost:6233
+      - RESTACK_TEMPORAL_ADDRESS=localhost:7233
+      - WALLET_PRIVATE_KEY=${WALLET_PRIVATE_KEY}
+      - WALLET_ADDRESS=${WALLET_ADDRESS}
+      - MODE_NETWORK=${MODE_NETWORK}
     depends_on:
       - restack-engine
       - docker-dind
       - backend
     command: ["sh", "-c", "sleep 5 && poetry run python -m src.services"]
-    networks:
-      - restack-network
+    network_mode: host
 
   frontend:
     build: ./frontend
     depends_on:
       - backend
-    ports:
-      - "3000:8080"
     command: ["npm", "run", "dev"]
-    networks:
-      - restack-network
-  
-networks:
-  restack-network:
-    driver: bridge
+    network_mode: host
