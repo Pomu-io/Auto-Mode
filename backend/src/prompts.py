@@ -1,93 +1,117 @@
-# backend/src/prompts.py
+# ./backend/src/prompts.py
 
-# Store defaults here
-default_generate_code_prompt = """You are an autonomous coding agent.
+# Updated prompts to clarify that "iterations.log" must store 
+# iteration notes, and "readme.md" is not overwritten after the initial.
+
+default_generate_code_prompt = """You are an autonomous coding agent specialized in creating and deploying Solidity smart contracts on Mode network.
 
 The user prompt: {user_prompt}
 The test conditions: {test_conditions}
 
-You must produce a Docker environment and code that meets the user's test conditions.
-
-**Additional Requirements**:
-- Start by creating a `readme.md` file as your first file in the files array. This `readme.md` should begin with `#./readme.md` and contain:
-  - A brief summary of the user's prompt.
-  - A brief step-by-step plan of what you intend to do to meet the test conditions.
-- Use a stable base Docker image: `FROM python:3.10-slim`.
-- Install any necessary dependencies in the Dockerfile.
-- Generate any configuration files (like `pyproject.toml` or `requirements.txt`) before the main Python files, if needed.
-- Each file must start with `#./<filename>` on the first line. For example:
-  `#./main.py`
-  `print('hello world')`
-- The Dockerfile should define an ENTRYPOINT that runs the main script or commands automatically so that running the container (e.g. `docker run ...`) immediately produces the final output required by the test conditions.
-- Ensure the output visible on stdout fulfills the test conditions without further intervention.
-
-**Return JSON strictly matching this schema**:
+**Required JSON structure** (all properties required):
 {{
   "dockerfile": "<string>",
-  "files": [
-    {{
-      "filename": "<string>",
-      "content": "<string>"
-    }},
-    ...
-  ]
+  "readme_md": "<string>",
+  "my_contract_sol": "<string>",
+  "my_contract_test_js": "<string>",
+  "deploy_js": "<string>",
+  "hardhat_config_js": "<string>",
+  "iterations_log": "<string>"
 }}
 
-**Order of files**:
-1. `readme.md` (with reasoning and plan)
-2. Any configuration files (like `pyproject.toml` or `requirements.txt`)
-3. Your main Python application files
+**Rules**:
+1. `readme_md`:
+   - The initial pass must contain an overview of the user's prompt and the solution approach.
+   - In subsequent passes, **do not overwrite** or modify `readme_md`. 
+     Instead, put iteration notes in `iterations_log`.
 
-**Example**:
-{{
-  "dockerfile": "FROM python:3.10-slim\\n... ENTRYPOINT [\\"python3\\", \\"main.py\\"]",
-  "files": [
-    {{
-      "filename": "readme.md",
-      "content": "#./readme.md\\nThis is my reasoning..."
-    }},
-    {{
-      "filename": "pyproject.toml",
-      "content": "#./pyproject.toml\\n..."
-    }},
-    {{
-      "filename": "main.py",
-      "content": "#./main.py\\nprint('hello world')"
-    }}
-  ]
-}}
+2. `iterations_log`:
+   - Must store iteration-by-iteration notes. Each pass, append a concise summary of:
+     - What you think the problem was
+     - What you did to fix it
+   - This ensures the entire iteration history is visible in one file.
+
+3. `my_contract_sol`, `my_contract_test_js`, `deploy_js`, and `hardhat_config_js`:
+   - Must contain the relevant Solidity contract, test file, deploy script, and Hardhat config.
+   - If the user’s test conditions are not fully known, use your best judgment or placeholder tests.
+
+4. `dockerfile`:
+   - Use `node:18-slim`.
+   - Must install all dependencies (e.g. `npm install`, `npx hardhat`) and then run tests + deployment.
+   - Exit with code 0 only if tests pass and deployment is successful.
+
+5. The contract should be deployed to Mode Testnet or Mainnet based on environment variables or arguments in the Hardhat config.
+
+6. Do **not** include additional top-level keys or objects. Return only the required keys in JSON.
+
+Now generate the code that meets the above structure, ensuring it will compile, run, test, and deploy under these conditions.
 """
 
 default_validate_output_prompt = """The test conditions: {test_conditions}
 
-dockerfile:
+Current structured data:
+- dockerfile:
 {dockerfile}
 
-files:
-{files_str}
+- readme_md:
+{readme_md}
 
-output:
+- my_contract_sol:
+{my_contract_sol}
+
+- my_contract_test_js:
+{my_contract_test_js}
+
+- deploy_js:
+{deploy_js}
+
+- hardhat_config_js:
+{hardhat_config_js}
+
+- iterations_log:
+{iterations_log}
+
+Container output:
 {output}
 
-If all test conditions are met, return exactly:
-{{ "result": true, "dockerfile": null, "files": null }}
+Evaluate if the container output meets the user's test conditions:
+1. If the tests pass
+2. If the contract is deployed successfully
 
-Otherwise (if you need to fix or add files, modify the dockerfile, etc.), return exactly:
+If **all** conditions are met, return exactly:
 {{
-  "result": false,
-  "dockerfile": "FROM python:3.10-slim\\n...",
-  "files": [
-    {{
-      "filename": "filename.ext",
-      "content": "#./filename.ext\\n..."
-    }}
-  ]
+  "result": true,
+  "dockerfile": null,
+  "readme_md": null,
+  "my_contract_sol": null,
+  "my_contract_test_js": null,
+  "deploy_js": null,
+  "hardhat_config_js": null,
+  "iterations_log": null
 }}
 
-You may add, remove, or modify multiple files as needed when returning false. Just ensure you follow the same schema and format strictly. Do not add extra commentary or keys.
-If returning null for dockerfile or files, use JSON null, not a string."""
+Otherwise, if changes are needed, return exactly:
+{{
+  "result": false,
+  "dockerfile": "FROM node:18-slim\\n...",
+  "readme_md": "<or null>",
+  "my_contract_sol": "<or null>",
+  "my_contract_test_js": "<or null>",
+  "deploy_js": "<or null>",
+  "hardhat_config_js": "<or null>",
+  "iterations_log": "<or updated iteration log with appended notes>"
+}}
 
-# Storing the current prompts in memory for simplicity.
+**IMPORTANT**:
+- If you make changes in your fix, return the **full** updated content for that field. 
+- If you leave a field unchanged, return `null` for it.
+- Always append a brief summary of this iteration’s attempt to `iterations_log`. 
+  For example, "Iteration #3: The error was [X], so we updated [Y]."
+
+Stick strictly to the JSON structure with no extra keys or commentary outside the JSON.
+"""
+
+# In-memory store of the prompts
 current_generate_code_prompt = default_generate_code_prompt
 current_validate_output_prompt = default_validate_output_prompt
 
