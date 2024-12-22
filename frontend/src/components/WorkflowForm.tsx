@@ -56,7 +56,7 @@ const WorkflowForm = ({
               value={userPrompt}
               onChange={(e) => setUserPrompt(e.target.value)}
               className="h-32 mt-2 textarea-code"
-              placeholder="Please create a basic ERC20 token named 'MyToken' with symbol 'MTK' and an initial supply of 1,000,000. Use OpenZeppelin if possible."
+              placeholder="Build an ERC-721 NFT contract that uses Crossmint to automatically mint an NFT when the user pays. Deploy to Mode Testnet using WALLET_PRIVATE_KEY."
 
             />
           </div>
@@ -68,10 +68,20 @@ const WorkflowForm = ({
               value={testConditions}
               onChange={(e) => setTestConditions(e.target.value)}
               className="h-32 mt-2 textarea-code"
-              placeholder="1) Name must be 'MyToken'.
-2) Symbol must be 'MTK'.
-3) Total supply is 1,000,000.
-4) Contract successfully deploys on Mode Testnet.
+              placeholder="1. The contract is a valid ERC-721 NFT contract.
+2. The contract integrates Crossmint’s API so that whenever a user calls a “mint” function and pays the required amount, Crossmint is invoked to automate the minting process.
+3. The contract is deployed successfully to Mode Testnet at chain ID 919. 
+   - Use `process.env.WALLET_PRIVATE_KEY` for signing transactions in the deploy script.
+4. A Hardhat test script confirms:
+   - The contract compiles successfully (no compilation errors).
+   - At least one test transaction is performed on Mode Testnet to confirm deployment. 
+   - If the user wants a more thorough test, check that `balanceOf(minter)` increments by 1 after the mint function.
+5. If Crossmint has any relevant environment variables like `CROSSMINT_API_KEY`, ensure they are read from `process.env`.
+6. The Docker container must exit with code 0 only if:
+   - The contract compiles.
+   - The Hardhat tests pass.
+   - The contract is deployed on Mode Testnet without errors.
+7. Print the final deployed contract address (on Mode Testnet) to stdout or logs.
 "
             />
           </div>
