@@ -2,7 +2,7 @@
 # This program is licensed under the Affero General Public License (AGPL).
 # See the LICENSE file for details.
 
-# src/functions/functions.py
+# ./backend/src/functions/functions.py
 from restack_ai.function import function, log
 from dataclasses import dataclass
 import os
@@ -12,67 +12,64 @@ import tempfile
 import subprocess
 
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import Optional
 
 from src.prompts import current_generate_code_prompt, current_validate_output_prompt
 
 openai.api_key = os.environ.get("OPENAI_KEY")
-
-# Use the OpenAI Python SDK's structured output parsing
 from openai import OpenAI
 client = OpenAI(api_key=openai.api_key)
 
-class FileItem(BaseModel):
-    filename: str
-    content: str
-
-    class Config:
-        extra = "forbid"
-        schema_extra = {
-            "type": "object",
-            "properties": {
-                "filename": {"type": "string"},
-                "content": {"type": "string"}
-            },
-            "required": ["filename", "content"],
-            "additionalProperties": False
-        }
-
+#
+# 1) GENERATE CODE SCHEMA
+#
 class GenerateCodeSchema(BaseModel):
     dockerfile: str
-    files: List[FileItem]
-    
+    readme_md: str
+    my_contract_sol: str
+    my_contract_test_js: str
+    deploy_js: str
+    hardhat_config_js: str
+    iterations_log: str
+
     class Config:
         extra = "forbid"
         schema_extra = {
             "type": "object",
             "properties": {
                 "dockerfile": {"type": "string"},
-                "files": {
-                    "type": "array",
-                    "items": {"$ref": "#/$defs/FileItem"}
-                }
+                "readme_md": {"type": "string"},
+                "my_contract_sol": {"type": "string"},
+                "my_contract_test_js": {"type": "string"},
+                "deploy_js": {"type": "string"},
+                "hardhat_config_js": {"type": "string"},
+                "iterations_log": {"type": "string"}
             },
-            "required": ["dockerfile", "files"],
-            "additionalProperties": False,
-            "$defs": {
-                "FileItem": {
-                    "type": "object",
-                    "properties": {
-                        "filename": {"type": "string"},
-                        "content": {"type": "string"}
-                    },
-                    "required": ["filename", "content"],
-                    "additionalProperties": False
-                }
-            }
+            "required": [
+                "dockerfile",
+                "readme_md",
+                "my_contract_sol",
+                "my_contract_test_js",
+                "deploy_js",
+                "hardhat_config_js",
+                "iterations_log"
+            ],
+            "additionalProperties": False
         }
 
+#
+# 2) VALIDATE OUTPUT SCHEMA
+#
 class ValidateOutputSchema(BaseModel):
     result: bool
     dockerfile: Optional[str] = None
-    files: Optional[List[FileItem]] = None
-    
+    readme_md: Optional[str] = None
+    my_contract_sol: Optional[str] = None
+    my_contract_test_js: Optional[str] = None
+    deploy_js: Optional[str] = None
+    hardhat_config_js: Optional[str] = None
+    iterations_log: Optional[str] = None
+
     class Config:
         extra = "forbid"
         schema_extra = {
@@ -85,29 +82,54 @@ class ValidateOutputSchema(BaseModel):
                         {"type": "null"}
                     ]
                 },
-                "files": {
+                "readme_md": {
                     "anyOf": [
-                        {
-                            "type": "array",
-                            "items": {"$ref": "#/$defs/FileItem"}
-                        },
+                        {"type": "string"},
+                        {"type": "null"}
+                    ]
+                },
+                "my_contract_sol": {
+                    "anyOf": [
+                        {"type": "string"},
+                        {"type": "null"}
+                    ]
+                },
+                "my_contract_test_js": {
+                    "anyOf": [
+                        {"type": "string"},
+                        {"type": "null"}
+                    ]
+                },
+                "deploy_js": {
+                    "anyOf": [
+                        {"type": "string"},
+                        {"type": "null"}
+                    ]
+                },
+                "hardhat_config_js": {
+                    "anyOf": [
+                        {"type": "string"},
+                        {"type": "null"}
+                    ]
+                },
+                "iterations_log": {
+                    "anyOf": [
+                        {"type": "string"},
                         {"type": "null"}
                     ]
                 }
             },
-            "required": ["result", "dockerfile", "files"],
-            "additionalProperties": False,
-            "$defs": {
-                "FileItem": {
-                    "type": "object",
-                    "properties": {
-                        "filename": {"type": "string"},
-                        "content": {"type": "string"}
-                    },
-                    "required": ["filename", "content"],
-                    "additionalProperties": False
-                }
-            }
+            "required": [
+                "result", 
+                "dockerfile",
+                "readme_md",
+                "my_contract_sol",
+                "my_contract_test_js",
+                "deploy_js",
+                "hardhat_config_js",
+                "iterations_log"
+            ],
+            "additionalProperties": False
         }
 
 
@@ -119,7 +141,12 @@ class GenerateCodeInput:
 @dataclass
 class GenerateCodeOutput:
     dockerfile: str
-    files: list
+    readme_md: str
+    my_contract_sol: str
+    my_contract_test_js: str
+    deploy_js: str
+    hardhat_config_js: str
+    iterations_log: str
 
 @function.defn()
 async def generate_code(input: GenerateCodeInput) -> GenerateCodeOutput:
@@ -133,7 +160,13 @@ async def generate_code(input: GenerateCodeInput) -> GenerateCodeOutput:
     completion = client.beta.chat.completions.parse(
         model="gpt-4o-2024-08-06",
         messages=[
-            {"role": "system", "content": "You are the initial of an autonomous coding assistant agent. Generate complete code that will run."},
+            {
+                "role": "system",
+                "content": (
+                    "You are the initial of an autonomous coding assistant agent. "
+                    "Generate a fully valid Hardhat project plus an iteration log."
+                )
+            },
             {"role": "user", "content": prompt}
         ],
         response_format=GenerateCodeSchema
@@ -144,15 +177,28 @@ async def generate_code(input: GenerateCodeInput) -> GenerateCodeOutput:
         raise RuntimeError("Model refused to generate code.")
     data = result.parsed
 
-    files_list = [{"filename": f.filename, "content": f.content} for f in data.files]
+    return GenerateCodeOutput(
+        dockerfile=data.dockerfile,
+        readme_md=data.readme_md,
+        my_contract_sol=data.my_contract_sol,
+        my_contract_test_js=data.my_contract_test_js,
+        deploy_js=data.deploy_js,
+        hardhat_config_js=data.hardhat_config_js,
+        iterations_log=data.iterations_log
+    )
 
-    return GenerateCodeOutput(dockerfile=data.dockerfile, files=files_list)
-
-
+#
+# RUNCODE: We will write each file out to its correct path and run Docker build/run.
+#
 @dataclass
 class RunCodeInput:
     dockerfile: str
-    files: list
+    readme_md: str
+    my_contract_sol: str
+    my_contract_test_js: str
+    deploy_js: str
+    hardhat_config_js: str
+    iterations_log: str
 
 @dataclass
 class RunCodeOutput:
@@ -163,19 +209,41 @@ async def run_locally(input: RunCodeInput) -> RunCodeOutput:
     log.info("run_locally started", input=input)
     
     with tempfile.TemporaryDirectory() as temp_dir:
+        # 1. Dockerfile
         dockerfile_path = os.path.join(temp_dir, "Dockerfile")
-        
-        # Write the Dockerfile
-        with open(dockerfile_path, "w", encoding="utf-8") as f:
-            f.write(input.dockerfile)
-        
-        # Write each file
-        for file_item in input.files:
-            file_path = os.path.join(temp_dir, file_item["filename"])
-            os.makedirs(os.path.dirname(file_path), exist_ok=True)
-            with open(file_path, "w", encoding="utf-8") as ff:
-                ff.write(file_item["content"])
-        
+        with open(dockerfile_path, "w", encoding="utf-8") as df:
+            df.write(input.dockerfile)
+
+        # 2. readme.md (optional usage in container, but we store it)
+        with open(os.path.join(temp_dir, "readme.md"), "w", encoding="utf-8") as f:
+            f.write(input.readme_md)
+
+        # 3. contracts/MyContract.sol
+        contracts_dir = os.path.join(temp_dir, "contracts")
+        os.makedirs(contracts_dir, exist_ok=True)
+        with open(os.path.join(contracts_dir, "MyContract.sol"), "w", encoding="utf-8") as f:
+            f.write(input.my_contract_sol)
+
+        # 4. test/my_contract_test.js
+        test_dir = os.path.join(temp_dir, "test")
+        os.makedirs(test_dir, exist_ok=True)
+        with open(os.path.join(test_dir, "my_contract_test.js"), "w", encoding="utf-8") as f:
+            f.write(input.my_contract_test_js)
+
+        # 5. scripts/deploy.js
+        scripts_dir = os.path.join(temp_dir, "scripts")
+        os.makedirs(scripts_dir, exist_ok=True)
+        with open(os.path.join(scripts_dir, "deploy.js"), "w", encoding="utf-8") as f:
+            f.write(input.deploy_js)
+
+        # 6. hardhat.config.js
+        with open(os.path.join(temp_dir, "hardhat.config.js"), "w", encoding="utf-8") as f:
+            f.write(input.hardhat_config_js)
+
+        # 7. iterations.log
+        with open(os.path.join(temp_dir, "iterations.log"), "w", encoding="utf-8") as f:
+            f.write(input.iterations_log)
+
         # Build the Docker image
         build_cmd = ["docker", "build", "-t", "myapp", temp_dir]
         build_process = subprocess.run(build_cmd, capture_output=True, text=True)
@@ -190,11 +258,19 @@ async def run_locally(input: RunCodeInput) -> RunCodeOutput:
         
         return RunCodeOutput(output=run_process.stdout)
 
-
+#
+# VALIDATEOUTPUT: We parse the container output, see if test conditions were met,
+# possibly update iteration log or other files. If everything is good, return result=true.
+#
 @dataclass
 class ValidateOutputInput:
     dockerfile: str
-    files: list
+    readme_md: str
+    my_contract_sol: str
+    my_contract_test_js: str
+    deploy_js: str
+    hardhat_config_js: str
+    iterations_log: str
     output: str
     test_conditions: str
 
@@ -202,25 +278,53 @@ class ValidateOutputInput:
 class ValidateOutputOutput:
     result: bool
     dockerfile: Optional[str] = None
-    files: Optional[list] = None
+    readme_md: Optional[str] = None
+    my_contract_sol: Optional[str] = None
+    my_contract_test_js: Optional[str] = None
+    deploy_js: Optional[str] = None
+    hardhat_config_js: Optional[str] = None
+    iterations_log: Optional[str] = None
 
 @function.defn()
 async def validate_output(input: ValidateOutputInput) -> ValidateOutputOutput:
     log.info("validate_output started", input=input)
 
-    files_str = json.dumps(input.files, indent=2)
+    # Convert everything into JSON for the prompt
+    data_for_prompt = {
+        "dockerfile": input.dockerfile,
+        "readme_md": input.readme_md,
+        "my_contract_sol": input.my_contract_sol,
+        "my_contract_test_js": input.my_contract_test_js,
+        "deploy_js": input.deploy_js,
+        "hardhat_config_js": input.hardhat_config_js,
+        "iterations_log": input.iterations_log
+    }
+
+    json_data_str = json.dumps(data_for_prompt, indent=2)
 
     validation_prompt = current_validate_output_prompt.format(
         test_conditions=input.test_conditions,
         dockerfile=input.dockerfile,
-        files_str=files_str,
+        readme_md=input.readme_md,
+        my_contract_sol=input.my_contract_sol,
+        my_contract_test_js=input.my_contract_test_js,
+        deploy_js=input.deploy_js,
+        hardhat_config_js=input.hardhat_config_js,
+        iterations_log=input.iterations_log,
         output=input.output
     )
 
     completion = client.beta.chat.completions.parse(
         model="gpt-4o-2024-08-06",
         messages=[
-            {"role": "system", "content": "You are an iteration of an autonomous coding assistant agent. If you change any files, provide complete file content replacements. Append a brief explanation at the bottom of readme.md about what you tried."},
+            {
+                "role": "system",
+                "content": (
+                    "You are an iteration of an autonomous coding assistant agent. "
+                    "If you change any fields, provide the complete updated content. "
+                    "Append a brief summary of your fix attempt to iterations_log."
+                )
+            },
             {"role": "user", "content": validation_prompt}
         ],
         response_format=ValidateOutputSchema
@@ -228,9 +332,18 @@ async def validate_output(input: ValidateOutputInput) -> ValidateOutputOutput:
 
     result = completion.choices[0].message
     if result.refusal:
+        # If the model refused or didn't provide a result
         return ValidateOutputOutput(result=False)
 
-    data = result.parsed
-    updated_files = [{"filename": f.filename, "content": f.content} for f in data.files] if data.files is not None else None
-
-    return ValidateOutputOutput(result=data.result, dockerfile=data.dockerfile, files=updated_files)
+    parsed = result.parsed
+    
+    return ValidateOutputOutput(
+        result=parsed.result,
+        dockerfile=parsed.dockerfile,
+        readme_md=parsed.readme_md,
+        my_contract_sol=parsed.my_contract_sol,
+        my_contract_test_js=parsed.my_contract_test_js,
+        deploy_js=parsed.deploy_js,
+        hardhat_config_js=parsed.hardhat_config_js,
+        iterations_log=parsed.iterations_log
+    )
