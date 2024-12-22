@@ -130,7 +130,7 @@ async def generate_code(input: GenerateCodeInput) -> GenerateCodeOutput:
     )
 
     completion = client.beta.chat.completions.parse(
-        model="gpt-4",
+        model="gpt-4o",
         messages=[
             {
                 "role": "system",
@@ -307,7 +307,7 @@ async def validate_output(input: ValidateOutputInput) -> ValidateOutputOutput:
     )
 
     completion = client.beta.chat.completions.parse(
-        model="gpt-4",
+        model="gpt-4o",
         messages=[
             {
                 "role": "system",
