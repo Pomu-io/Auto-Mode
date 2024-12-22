@@ -33,7 +33,7 @@ class GenerateCodeSchema(BaseModel):
     hardhat_config_js: str
     iterations_log: str
     package_json: str
-    package_lock_json: Optional[str] = None
+    package_lock_json: str  # can be empty or minimal
 
     class Config:
         extra = "forbid"
@@ -58,7 +58,8 @@ class GenerateCodeSchema(BaseModel):
                 "deploy_js",
                 "hardhat_config_js",
                 "iterations_log",
-                "package_json"
+                "package_json",
+                "package_lock_json"
             ],
             "additionalProperties": False
         }
@@ -84,15 +85,15 @@ class ValidateOutputSchema(BaseModel):
             "type": "object",
             "properties": {
                 "result": {"type": "boolean"},
-                "dockerfile": {"anyOf": [{"type": "string"}, {"type": "null"}]},
-                "readme_md": {"anyOf": [{"type": "string"}, {"type": "null"}]},
-                "my_contract_sol": {"anyOf": [{"type": "string"}, {"type": "null"}]},
-                "my_contract_test_js": {"anyOf": [{"type": "string"}, {"type": "null"}]},
-                "deploy_js": {"anyOf": [{"type": "string"}, {"type": "null"}]},
-                "hardhat_config_js": {"anyOf": [{"type": "string"}, {"type": "null"}]},
-                "iterations_log": {"anyOf": [{"type": "string"}, {"type": "null"}]},
-                "package_json": {"anyOf": [{"type": "string"}, {"type": "null"}]},
-                "package_lock_json": {"anyOf": [{"type": "string"}, {"type": "null"}]}
+                "dockerfile": {"anyOf":[{"type":"string"},{"type":"null"}]},
+                "readme_md": {"anyOf":[{"type":"string"},{"type":"null"}]},
+                "my_contract_sol": {"anyOf":[{"type":"string"},{"type":"null"}]},
+                "my_contract_test_js": {"anyOf":[{"type":"string"},{"type":"null"}]},
+                "deploy_js": {"anyOf":[{"type":"string"},{"type":"null"}]},
+                "hardhat_config_js": {"anyOf":[{"type":"string"},{"type":"null"}]},
+                "iterations_log": {"anyOf":[{"type":"string"},{"type":"null"}]},
+                "package_json": {"anyOf":[{"type":"string"},{"type":"null"}]},
+                "package_lock_json": {"anyOf":[{"type":"string"},{"type":"null"}]}
             },
             "required": [
                 "result",
@@ -109,7 +110,7 @@ class ValidateOutputSchema(BaseModel):
             "additionalProperties": False
         }
 
-# 3) Data models
+
 @dataclass
 class GenerateCodeInput:
     user_prompt: str
@@ -125,7 +126,7 @@ class GenerateCodeOutput:
     hardhat_config_js: str
     iterations_log: str
     package_json: str
-    package_lock_json: Optional[str]
+    package_lock_json: str
 
 @function.defn()
 async def generate_code(input: GenerateCodeInput) -> GenerateCodeOutput:
@@ -141,7 +142,10 @@ async def generate_code(input: GenerateCodeInput) -> GenerateCodeOutput:
         messages=[
             {
                 "role": "system",
-                "content": "You are the initial of an autonomous coding assistant agent. Generate a complete Hardhat project."
+                "content": (
+                    "You are the initial of an autonomous coding assistant agent. "
+                    "Generate a fully valid Hardhat project plus iteration logs."
+                )
             },
             {"role": "user", "content": prompt}
         ],
@@ -166,7 +170,7 @@ async def generate_code(input: GenerateCodeInput) -> GenerateCodeOutput:
     )
 
 #
-# RUNCODE
+#  RUN LOCALLY
 #
 @dataclass
 class RunCodeInput:
@@ -178,7 +182,7 @@ class RunCodeInput:
     hardhat_config_js: str
     iterations_log: str
     package_json: str
-    package_lock_json: Optional[str]
+    package_lock_json: str
 
 @dataclass
 class RunCodeOutput:
@@ -224,36 +228,22 @@ async def run_locally(input: RunCodeInput) -> RunCodeOutput:
         with open(os.path.join(temp_dir, "iterations.log"), "w", encoding="utf-8") as f:
             f.write(input.iterations_log)
 
-        # 8) package.json + package-lock.json
+        # 8) package.json
         with open(os.path.join(temp_dir, "package.json"), "w", encoding="utf-8") as f:
             f.write(input.package_json)
-        if input.package_lock_json:
-            with open(os.path.join(temp_dir, "package-lock.json"), "w", encoding="utf-8") as f:
-                f.write(input.package_lock_json)
 
-        # Build the Docker image
+        # 9) package-lock.json (can be empty or minimal)
+        with open(os.path.join(temp_dir, "package-lock.json"), "w", encoding="utf-8") as f:
+            f.write(input.package_lock_json)
+
+        # Docker build
         build_cmd = ["docker", "build", "-t", "myapp", temp_dir]
         build_process = subprocess.run(build_cmd, capture_output=True, text=True)
         if build_process.returncode != 0:
             return RunCodeOutput(output=build_process.stderr or build_process.stdout)
         
-        # Collect environment variables we want to pass
-        # (Feel free to add or remove keys as needed.)
-        env_vars = {
-            "WALLET_PRIVATE_KEY": os.environ.get("WALLET_PRIVATE_KEY", ""),
-            "WALLET_ADDRESS": os.environ.get("WALLET_ADDRESS", ""),
-            "MODE_NETWORK": os.environ.get("MODE_NETWORK", ""),
-            "CROSSMINT_API_KEY": os.environ.get("CROSSMINT_API_KEY", "")
-        }
-        
-        # Construct a list of "-e KEY=VALUE" for each non-empty var
-        env_args = []
-        for key, val in env_vars.items():
-            if val:
-                env_args.extend(["-e", f"{key}={val}"])
-        
-        # Run the Docker container, injecting the environment variables
-        run_cmd = ["docker", "run", "--rm"] + env_args + ["myapp"]
+        # Docker run
+        run_cmd = ["docker", "run", "--rm", "myapp"]
         run_process = subprocess.run(run_cmd, capture_output=True, text=True)
         if run_process.returncode != 0:
             return RunCodeOutput(output=run_process.stderr or run_process.stdout)
@@ -261,7 +251,7 @@ async def run_locally(input: RunCodeInput) -> RunCodeOutput:
         return RunCodeOutput(output=run_process.stdout)
 
 #
-# VALIDATEOUTPUT
+# VALIDATE OUTPUT
 #
 @dataclass
 class ValidateOutputInput:
@@ -273,7 +263,7 @@ class ValidateOutputInput:
     hardhat_config_js: str
     iterations_log: str
     package_json: str
-    package_lock_json: Optional[str]
+    package_lock_json: str
     output: str
     test_conditions: str
 
@@ -316,7 +306,7 @@ async def validate_output(input: ValidateOutputInput) -> ValidateOutputOutput:
                 "content": (
                     "You are an iteration of an autonomous coding assistant agent. "
                     "If you change any fields, provide the complete updated content. "
-                    "Append iteration notes to iterations_log."
+                    "Always append a brief summary of your fix attempt to iterations_log."
                 )
             },
             {"role": "user", "content": validation_prompt}
@@ -326,9 +316,11 @@ async def validate_output(input: ValidateOutputInput) -> ValidateOutputOutput:
 
     result = completion.choices[0].message
     if result.refusal:
+        # If the model refused or didn't provide a result
         return ValidateOutputOutput(result=False)
 
     parsed = result.parsed
+    
     return ValidateOutputOutput(
         result=parsed.result,
         dockerfile=parsed.dockerfile,
