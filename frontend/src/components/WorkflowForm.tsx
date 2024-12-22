@@ -56,7 +56,8 @@ const WorkflowForm = ({
               value={userPrompt}
               onChange={(e) => setUserPrompt(e.target.value)}
               className="h-32 mt-2 textarea-code"
-              placeholder="Write a Python script that prints 'hello world'"
+              placeholder="Please create a basic ERC20 token named 'MyToken' with symbol 'MTK' and an initial supply of 1,000,000. Use OpenZeppelin if possible."
+
             />
           </div>
 
@@ -67,7 +68,11 @@ const WorkflowForm = ({
               value={testConditions}
               onChange={(e) => setTestConditions(e.target.value)}
               className="h-32 mt-2 textarea-code"
-              placeholder="The script must print exactly 'hello world' and exit with code 0."
+              placeholder="1) Name must be 'MyToken'.
+2) Symbol must be 'MTK'.
+3) Total supply is 1,000,000.
+4) Contract successfully deploys on Mode Testnet.
+"
             />
           </div>
 
