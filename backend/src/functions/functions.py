@@ -3,6 +3,7 @@
 # See the LICENSE file for details.
 
 # ./backend/src/functions/functions.py
+
 from restack_ai.function import function, log
 from dataclasses import dataclass
 import os
@@ -31,6 +32,8 @@ class GenerateCodeSchema(BaseModel):
     deploy_js: str
     hardhat_config_js: str
     iterations_log: str
+    package_json: str
+    package_lock_json: Optional[str] = None
 
     class Config:
         extra = "forbid"
@@ -43,7 +46,9 @@ class GenerateCodeSchema(BaseModel):
                 "my_contract_test_js": {"type": "string"},
                 "deploy_js": {"type": "string"},
                 "hardhat_config_js": {"type": "string"},
-                "iterations_log": {"type": "string"}
+                "iterations_log": {"type": "string"},
+                "package_json": {"type": "string"},
+                "package_lock_json": {"type": "string"}
             },
             "required": [
                 "dockerfile",
@@ -52,7 +57,8 @@ class GenerateCodeSchema(BaseModel):
                 "my_contract_test_js",
                 "deploy_js",
                 "hardhat_config_js",
-                "iterations_log"
+                "iterations_log",
+                "package_json"
             ],
             "additionalProperties": False
         }
@@ -69,6 +75,8 @@ class ValidateOutputSchema(BaseModel):
     deploy_js: Optional[str] = None
     hardhat_config_js: Optional[str] = None
     iterations_log: Optional[str] = None
+    package_json: Optional[str] = None
+    package_lock_json: Optional[str] = None
 
     class Config:
         extra = "forbid"
@@ -76,63 +84,32 @@ class ValidateOutputSchema(BaseModel):
             "type": "object",
             "properties": {
                 "result": {"type": "boolean"},
-                "dockerfile": {
-                    "anyOf": [
-                        {"type": "string"},
-                        {"type": "null"}
-                    ]
-                },
-                "readme_md": {
-                    "anyOf": [
-                        {"type": "string"},
-                        {"type": "null"}
-                    ]
-                },
-                "my_contract_sol": {
-                    "anyOf": [
-                        {"type": "string"},
-                        {"type": "null"}
-                    ]
-                },
-                "my_contract_test_js": {
-                    "anyOf": [
-                        {"type": "string"},
-                        {"type": "null"}
-                    ]
-                },
-                "deploy_js": {
-                    "anyOf": [
-                        {"type": "string"},
-                        {"type": "null"}
-                    ]
-                },
-                "hardhat_config_js": {
-                    "anyOf": [
-                        {"type": "string"},
-                        {"type": "null"}
-                    ]
-                },
-                "iterations_log": {
-                    "anyOf": [
-                        {"type": "string"},
-                        {"type": "null"}
-                    ]
-                }
+                "dockerfile": {"anyOf": [{"type": "string"}, {"type": "null"}]},
+                "readme_md": {"anyOf": [{"type": "string"}, {"type": "null"}]},
+                "my_contract_sol": {"anyOf": [{"type": "string"}, {"type": "null"}]},
+                "my_contract_test_js": {"anyOf": [{"type": "string"}, {"type": "null"}]},
+                "deploy_js": {"anyOf": [{"type": "string"}, {"type": "null"}]},
+                "hardhat_config_js": {"anyOf": [{"type": "string"}, {"type": "null"}]},
+                "iterations_log": {"anyOf": [{"type": "string"}, {"type": "null"}]},
+                "package_json": {"anyOf": [{"type": "string"}, {"type": "null"}]},
+                "package_lock_json": {"anyOf": [{"type": "string"}, {"type": "null"}]}
             },
             "required": [
-                "result", 
+                "result",
                 "dockerfile",
                 "readme_md",
                 "my_contract_sol",
                 "my_contract_test_js",
                 "deploy_js",
                 "hardhat_config_js",
-                "iterations_log"
+                "iterations_log",
+                "package_json",
+                "package_lock_json"
             ],
             "additionalProperties": False
         }
 
-
+# 3) Data models
 @dataclass
 class GenerateCodeInput:
     user_prompt: str
@@ -147,6 +124,8 @@ class GenerateCodeOutput:
     deploy_js: str
     hardhat_config_js: str
     iterations_log: str
+    package_json: str
+    package_lock_json: Optional[str]
 
 @function.defn()
 async def generate_code(input: GenerateCodeInput) -> GenerateCodeOutput:
@@ -162,10 +141,7 @@ async def generate_code(input: GenerateCodeInput) -> GenerateCodeOutput:
         messages=[
             {
                 "role": "system",
-                "content": (
-                    "You are the initial of an autonomous coding assistant agent. "
-                    "Generate a fully valid Hardhat project plus an iteration log."
-                )
+                "content": "You are the initial of an autonomous coding assistant agent. Generate a complete Hardhat project."
             },
             {"role": "user", "content": prompt}
         ],
@@ -184,11 +160,13 @@ async def generate_code(input: GenerateCodeInput) -> GenerateCodeOutput:
         my_contract_test_js=data.my_contract_test_js,
         deploy_js=data.deploy_js,
         hardhat_config_js=data.hardhat_config_js,
-        iterations_log=data.iterations_log
+        iterations_log=data.iterations_log,
+        package_json=data.package_json,
+        package_lock_json=data.package_lock_json
     )
 
 #
-# RUNCODE: We will write each file out to its correct path and run Docker build/run.
+# RUNCODE
 #
 @dataclass
 class RunCodeInput:
@@ -199,6 +177,8 @@ class RunCodeInput:
     deploy_js: str
     hardhat_config_js: str
     iterations_log: str
+    package_json: str
+    package_lock_json: Optional[str]
 
 @dataclass
 class RunCodeOutput:
@@ -209,40 +189,47 @@ async def run_locally(input: RunCodeInput) -> RunCodeOutput:
     log.info("run_locally started", input=input)
     
     with tempfile.TemporaryDirectory() as temp_dir:
-        # 1. Dockerfile
+        # 1) Dockerfile
         dockerfile_path = os.path.join(temp_dir, "Dockerfile")
         with open(dockerfile_path, "w", encoding="utf-8") as df:
             df.write(input.dockerfile)
 
-        # 2. readme.md (optional usage in container, but we store it)
+        # 2) readme.md
         with open(os.path.join(temp_dir, "readme.md"), "w", encoding="utf-8") as f:
             f.write(input.readme_md)
 
-        # 3. contracts/MyContract.sol
+        # 3) contracts/MyContract.sol
         contracts_dir = os.path.join(temp_dir, "contracts")
         os.makedirs(contracts_dir, exist_ok=True)
         with open(os.path.join(contracts_dir, "MyContract.sol"), "w", encoding="utf-8") as f:
             f.write(input.my_contract_sol)
 
-        # 4. test/my_contract_test.js
+        # 4) test/my_contract_test.js
         test_dir = os.path.join(temp_dir, "test")
         os.makedirs(test_dir, exist_ok=True)
         with open(os.path.join(test_dir, "my_contract_test.js"), "w", encoding="utf-8") as f:
             f.write(input.my_contract_test_js)
 
-        # 5. scripts/deploy.js
+        # 5) scripts/deploy.js
         scripts_dir = os.path.join(temp_dir, "scripts")
         os.makedirs(scripts_dir, exist_ok=True)
         with open(os.path.join(scripts_dir, "deploy.js"), "w", encoding="utf-8") as f:
             f.write(input.deploy_js)
 
-        # 6. hardhat.config.js
+        # 6) hardhat.config.js
         with open(os.path.join(temp_dir, "hardhat.config.js"), "w", encoding="utf-8") as f:
             f.write(input.hardhat_config_js)
 
-        # 7. iterations.log
+        # 7) iterations.log
         with open(os.path.join(temp_dir, "iterations.log"), "w", encoding="utf-8") as f:
             f.write(input.iterations_log)
+
+        # 8) package.json + package-lock.json
+        with open(os.path.join(temp_dir, "package.json"), "w", encoding="utf-8") as f:
+            f.write(input.package_json)
+        if input.package_lock_json:
+            with open(os.path.join(temp_dir, "package-lock.json"), "w", encoding="utf-8") as f:
+                f.write(input.package_lock_json)
 
         # Build the Docker image
         build_cmd = ["docker", "build", "-t", "myapp", temp_dir]
@@ -259,8 +246,7 @@ async def run_locally(input: RunCodeInput) -> RunCodeOutput:
         return RunCodeOutput(output=run_process.stdout)
 
 #
-# VALIDATEOUTPUT: We parse the container output, see if test conditions were met,
-# possibly update iteration log or other files. If everything is good, return result=true.
+# VALIDATEOUTPUT
 #
 @dataclass
 class ValidateOutputInput:
@@ -271,6 +257,8 @@ class ValidateOutputInput:
     deploy_js: str
     hardhat_config_js: str
     iterations_log: str
+    package_json: str
+    package_lock_json: Optional[str]
     output: str
     test_conditions: str
 
@@ -284,23 +272,12 @@ class ValidateOutputOutput:
     deploy_js: Optional[str] = None
     hardhat_config_js: Optional[str] = None
     iterations_log: Optional[str] = None
+    package_json: Optional[str] = None
+    package_lock_json: Optional[str] = None
 
 @function.defn()
 async def validate_output(input: ValidateOutputInput) -> ValidateOutputOutput:
     log.info("validate_output started", input=input)
-
-    # Convert everything into JSON for the prompt
-    data_for_prompt = {
-        "dockerfile": input.dockerfile,
-        "readme_md": input.readme_md,
-        "my_contract_sol": input.my_contract_sol,
-        "my_contract_test_js": input.my_contract_test_js,
-        "deploy_js": input.deploy_js,
-        "hardhat_config_js": input.hardhat_config_js,
-        "iterations_log": input.iterations_log
-    }
-
-    json_data_str = json.dumps(data_for_prompt, indent=2)
 
     validation_prompt = current_validate_output_prompt.format(
         test_conditions=input.test_conditions,
@@ -311,6 +288,8 @@ async def validate_output(input: ValidateOutputInput) -> ValidateOutputOutput:
         deploy_js=input.deploy_js,
         hardhat_config_js=input.hardhat_config_js,
         iterations_log=input.iterations_log,
+        package_json=input.package_json,
+        package_lock_json=input.package_lock_json,
         output=input.output
     )
 
@@ -322,7 +301,7 @@ async def validate_output(input: ValidateOutputInput) -> ValidateOutputOutput:
                 "content": (
                     "You are an iteration of an autonomous coding assistant agent. "
                     "If you change any fields, provide the complete updated content. "
-                    "Append a brief summary of your fix attempt to iterations_log."
+                    "Append iteration notes to iterations_log."
                 )
             },
             {"role": "user", "content": validation_prompt}
@@ -332,11 +311,9 @@ async def validate_output(input: ValidateOutputInput) -> ValidateOutputOutput:
 
     result = completion.choices[0].message
     if result.refusal:
-        # If the model refused or didn't provide a result
         return ValidateOutputOutput(result=False)
 
     parsed = result.parsed
-    
     return ValidateOutputOutput(
         result=parsed.result,
         dockerfile=parsed.dockerfile,
@@ -345,5 +322,7 @@ async def validate_output(input: ValidateOutputInput) -> ValidateOutputOutput:
         my_contract_test_js=parsed.my_contract_test_js,
         deploy_js=parsed.deploy_js,
         hardhat_config_js=parsed.hardhat_config_js,
-        iterations_log=parsed.iterations_log
+        iterations_log=parsed.iterations_log,
+        package_json=parsed.package_json,
+        package_lock_json=parsed.package_lock_json
     )
