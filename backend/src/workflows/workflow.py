@@ -35,7 +35,7 @@ class AutonomousCodingWorkflow:
             start_to_close_timeout=timedelta(seconds=300)
         )
 
-        # We store each field
+        # Store each field
         dockerfile = gen_output.dockerfile
         readme_md = gen_output.readme_md
         my_contract_sol = gen_output.my_contract_sol
@@ -43,6 +43,8 @@ class AutonomousCodingWorkflow:
         deploy_js = gen_output.deploy_js
         hardhat_config_js = gen_output.hardhat_config_js
         iterations_log = gen_output.iterations_log
+        package_json = gen_output.package_json
+        package_lock_json = gen_output.package_lock_json
 
         iteration_count = 0
         max_iterations = 20
@@ -51,7 +53,7 @@ class AutonomousCodingWorkflow:
             iteration_count += 1
             log.info(f"Iteration {iteration_count} start")
 
-            # Step 2: Run the container
+            # Step 2: Run code
             run_output = await workflow.step(
                 run_locally,
                 RunCodeInput(
@@ -61,7 +63,9 @@ class AutonomousCodingWorkflow:
                     my_contract_test_js=my_contract_test_js,
                     deploy_js=deploy_js,
                     hardhat_config_js=hardhat_config_js,
-                    iterations_log=iterations_log
+                    iterations_log=iterations_log,
+                    package_json=package_json,
+                    package_lock_json=package_lock_json
                 ),
                 start_to_close_timeout=timedelta(seconds=300)
             )
@@ -77,6 +81,8 @@ class AutonomousCodingWorkflow:
                     deploy_js=deploy_js,
                     hardhat_config_js=hardhat_config_js,
                     iterations_log=iterations_log,
+                    package_json=package_json,
+                    package_lock_json=package_lock_json,
                     output=run_output.output,
                     test_conditions=input.test_conditions
                 ),
@@ -84,11 +90,21 @@ class AutonomousCodingWorkflow:
             )
 
             if val_output.result:
-                # Success, end workflow
-                log.info("AutonomousCodingWorkflow completed successfully")
-                return True
+                # On success, return the final JSON so the user sees all files
+                return {
+                    "success": True,
+                    "dockerfile": dockerfile,
+                    "readme_md": readme_md,
+                    "my_contract_sol": my_contract_sol,
+                    "my_contract_test_js": my_contract_test_js,
+                    "deploy_js": deploy_js,
+                    "hardhat_config_js": hardhat_config_js,
+                    "iterations_log": iterations_log,
+                    "package_json": package_json,
+                    "package_lock_json": package_lock_json
+                }
 
-            # Otherwise, update any non-null fields
+            # Otherwise, update any fields that are not null
             if val_output.dockerfile is not None:
                 dockerfile = val_output.dockerfile
             if val_output.readme_md is not None:
@@ -103,7 +119,21 @@ class AutonomousCodingWorkflow:
                 hardhat_config_js = val_output.hardhat_config_js
             if val_output.iterations_log is not None:
                 iterations_log = val_output.iterations_log
+            if val_output.package_json is not None:
+                package_json = val_output.package_json
+            if val_output.package_lock_json is not None:
+                package_lock_json = val_output.package_lock_json
 
-        # If we exhaust max_iterations
-        log.warn("AutonomousCodingWorkflow reached max iterations without success")
-        return False
+        # If we exhaust max_iterations, return the final data anyway, but mark success = False
+        return {
+            "success": False,
+            "dockerfile": dockerfile,
+            "readme_md": readme_md,
+            "my_contract_sol": my_contract_sol,
+            "my_contract_test_js": my_contract_test_js,
+            "deploy_js": deploy_js,
+            "hardhat_config_js": hardhat_config_js,
+            "iterations_log": iterations_log,
+            "package_json": package_json,
+            "package_lock_json": package_lock_json
+        }
