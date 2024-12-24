@@ -19,7 +19,7 @@ app = FastAPI()
 # CORS configuration
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000","http://localhost:8080"],
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"]
@@ -47,7 +47,7 @@ async def global_exception_handler(request: Request, exc: Exception):
     return JSONResponse(
         status_code=500,
         content={"error": "Internal Server Error."},
-        headers={"Access-Control-Allow-Origin": "http://localhost:3000"},
+        headers={"Access-Control-Allow-Origin": "*"},
     )
 
 @app.post("/run_workflow")
