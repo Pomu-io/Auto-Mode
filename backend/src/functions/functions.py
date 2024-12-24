@@ -186,7 +186,7 @@ async def generate_code(input: GenerateCodeInput) -> GenerateCodeOutput:
 
     # 4) Request structured output from GPT
     completion = client.beta.chat.completions.parse(
-        model="gpt-4o",
+        model="gpt-4o-2024-08-06",
         messages=[
             {"role": "system", "content": system_message},
             {"role": "user", "content": user_prompt_text}
@@ -281,7 +281,7 @@ async def validate_output(input: ValidateOutputInput) -> ValidateOutputOutput:
     )
 
     completion = client.beta.chat.completions.parse(
-        model="gpt-4o",
+        model="gpt-4o-2024-08-06",
         messages=[
             {
                 "role": "system",
