@@ -21,11 +21,6 @@ services:
       - OPENAI_KEY=${OPENAI_KEY}
       - DOCKER_HOST=tcp://localhost:2375
       - RESTACK_ENGINE_ADDRESS=localhost:6233
-      - WALLET_PRIVATE_KEY=${WALLET_PRIVATE_KEY}
-      - WALLET_ADDRESS=${WALLET_ADDRESS}
-      - MODE_NETWORK=${MODE_NETWORK}
-      - CROSSMINT_API_KEY=${CROSSMINT_API_KEY}
-      # The LLM has acess to all these by default. Add additional environment variables as needed, but make sure you also set in .env file and in run_locally function and tell LLM what do do with it
     depends_on:
       - restack-engine
       - docker-dind
