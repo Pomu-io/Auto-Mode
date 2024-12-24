@@ -21,6 +21,7 @@ services:
       - OPENAI_KEY=${OPENAI_KEY}
       - DOCKER_HOST=tcp://localhost:2375
       - RESTACK_ENGINE_ADDRESS=localhost:6233
+      # user env_vars need to be passed here from .env (and maybe worker?) somehow. also need to be passed into functions.py env_vars
     depends_on:
       - restack-engine
       - docker-dind
