@@ -17,7 +17,7 @@ from pydantic import BaseModel
 
 from restack_ai.function import function, log
 
-# Import our prompt templates and helper from src/prompts.py
+# Import prompt templates and environment variable instructions
 from src.prompts import (
     current_generate_code_prompt,
     current_validate_output_prompt,
@@ -28,8 +28,6 @@ from src.prompts import (
 # OPENAI CONFIGURATION #
 ########################
 openai.api_key = os.environ.get("OPENAI_KEY")
-
-# Using the structured output parsing interface
 from openai import OpenAI
 client = OpenAI(api_key=openai.api_key)
 
@@ -140,7 +138,7 @@ class GenerateCodeOutput:
 @dataclass
 class RunCodeInput:
     dockerfile: str
-    files: list  # list of {"filename", "content"}
+    files: list  # list of {"filename": <str>, "content": <str>}
 
 @dataclass
 class RunCodeOutput:
@@ -165,45 +163,44 @@ class ValidateOutputOutput:
 @function.defn()
 async def generate_code(input: GenerateCodeInput) -> GenerateCodeOutput:
     """
-    Generates code (Dockerfile + multiple files) by calling the LLM.
-    We gather environment variables behind the scenes and pass them to
-    the LLM in the system prompt.
+    Calls the LLM to produce a Dockerfile + multiple files.
+    Includes environment variables in the system message if non-empty.
     """
     log.info("generate_code started", input=input)
 
     # 1) Gather environment variables behind the scenes
-    env_vars = {
-        "WALLET_PRIVATE_KEY": os.environ.get("WALLET_PRIVATE_KEY", ""),
-        "WALLET_ADDRESS": os.environ.get("WALLET_ADDRESS", ""),
-        "MODE_NETWORK": os.environ.get("MODE_NETWORK", ""),
-        "CROSSMINT_API_KEY": os.environ.get("CROSSMINT_API_KEY", "")
-    }
-    
+    env_vars = {}
+        # "WALLET_PRIVATE_KEY": os.environ.get("WALLET_PRIVATE_KEY", ""),
+        # "WALLET_ADDRESS": os.environ.get("WALLET_ADDRESS", ""),
+        # "MODE_NETWORK": os.environ.get("MODE_NETWORK", ""),
+        # "CROSSMINT_API_KEY": os.environ.get("CROSSMINT_API_KEY", "")
+
     # 2) Build a system prompt that tells the LLM about these variables
     system_message = build_system_message(env_vars)
 
-    # 3) Combine the user prompt with our default instructions
-    prompt = current_generate_code_prompt.format(
+    # 3) Merge the user prompt with our default instructions
+    user_prompt_text = current_generate_code_prompt.format(
         user_prompt=input.user_prompt,
         test_conditions=input.test_conditions
     )
 
-    # 4) Call the LLM with structured output
+    # 4) Request structured output from GPT
     completion = client.beta.chat.completions.parse(
-        model="gpt-4",
+        model="gpt-4o",
         messages=[
             {"role": "system", "content": system_message},
-            {"role": "user", "content": prompt}
+            {"role": "user", "content": user_prompt_text}
         ],
         response_format=GenerateCodeSchema
     )
 
+    # 5) Check results
     result = completion.choices[0].message
     if result.refusal:
         raise RuntimeError("Model refused to generate code.")
-    data = result.parsed
 
-    # 5) Convert the returned list of FileItems into a plain list of dict
+    # 6) Convert to final data structures
+    data = result.parsed
     files_list = [{"filename": f.filename, "content": f.content} for f in data.files]
 
     return GenerateCodeOutput(dockerfile=data.dockerfile, files=files_list)
@@ -214,23 +211,21 @@ async def generate_code(input: GenerateCodeInput) -> GenerateCodeOutput:
 @function.defn()
 async def run_locally(input: RunCodeInput) -> RunCodeOutput:
     """
-    Builds and runs the Docker container. If environment variables
-    are provided, writes them to a .env file that can be copied
-    by the generated Dockerfile (if it does so).
+    Builds and runs the Docker container in a temp directory. 
+    If environment variables are present, we write them to .env.
+    The LLM-coded Dockerfile is expected to COPY or reference .env if needed.
     """
     log.info("run_locally started", input=input)
 
-    # We'll gather the same environment variables. If they're non-empty,
-    # we create .env so the Dockerfile can pick it up (assuming it COPY .env).
+    # If you want to pass environment variables into the container:
     env_vars = {}
-    #     "WALLET_PRIVATE_KEY": os.environ.get("WALLET_PRIVATE_KEY", ""),
-    #     "WALLET_ADDRESS": os.environ.get("WALLET_ADDRESS", ""),
-    #     "MODE_NETWORK": os.environ.get("MODE_NETWORK", ""),
-    #     "CROSSMINT_API_KEY": os.environ.get("CROSSMINT_API_KEY", "")
-    
+        # "WALLET_PRIVATE_KEY": os.environ.get("WALLET_PRIVATE_KEY", ""),
+        # "WALLET_ADDRESS": os.environ.get("WALLET_ADDRESS", ""),
+        # "MODE_NETWORK": os.environ.get("MODE_NETWORK", ""),
+        # "CROSSMINT_API_KEY": os.environ.get("CROSSMINT_API_KEY", "")
 
     with tempfile.TemporaryDirectory() as temp_dir:
-        # 1) Write out the Dockerfile
+        # 1) Write Dockerfile
         dockerfile_path = os.path.join(temp_dir, "Dockerfile")
         with open(dockerfile_path, "w", encoding="utf-8") as df:
             df.write(input.dockerfile)
@@ -242,7 +237,7 @@ async def run_locally(input: RunCodeInput) -> RunCodeOutput:
             with open(file_path, "w", encoding="utf-8") as ff:
                 ff.write(file_item["content"])
 
-        # 3) If any non-empty env_vars, write .env
+        # 3) If any environment variables are non-empty, write .env
         non_empty_vars = {k: v for k, v in env_vars.items() if v}
         if non_empty_vars:
             env_file_path = os.path.join(temp_dir, ".env")
@@ -270,16 +265,14 @@ async def run_locally(input: RunCodeInput) -> RunCodeOutput:
 @function.defn()
 async def validate_output(input: ValidateOutputInput) -> ValidateOutputOutput:
     """
-    Calls the LLM to validate whether the generated code meets
-    the test conditions. If not, the LLM can provide updated
-    dockerfile/files.
+    Calls the LLM to validate whether the generated code meets test conditions.
+    If not, it may provide updated dockerfile/files.
     """
     log.info("validate_output started", input=input)
 
+    # Convert files array to JSON string for the prompt
     files_str = json.dumps(input.files, indent=2)
 
-    # For validation, we generally don't need environment vars in the prompt,
-    # but you could also incorporate them if your logic demands.
     validation_prompt = current_validate_output_prompt.format(
         test_conditions=input.test_conditions,
         dockerfile=input.dockerfile,
@@ -288,7 +281,7 @@ async def validate_output(input: ValidateOutputInput) -> ValidateOutputOutput:
     )
 
     completion = client.beta.chat.completions.parse(
-        model="gpt-4",
+        model="gpt-4o",
         messages=[
             {
                 "role": "system",
@@ -304,7 +297,7 @@ async def validate_output(input: ValidateOutputInput) -> ValidateOutputOutput:
 
     result = completion.choices[0].message
     if result.refusal:
-        # Model refused or did not provide a result
+        # Model refused or gave no valid answer
         return ValidateOutputOutput(result=False)
 
     data = result.parsed
