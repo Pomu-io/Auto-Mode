@@ -39,10 +39,6 @@ services:
       - DOCKER_HOST=tcp://localhost:2375
       - RESTACK_ENGINE_ADDRESS=localhost:6233
       - RESTACK_TEMPORAL_ADDRESS=localhost:7233
-      - WALLET_PRIVATE_KEY=${WALLET_PRIVATE_KEY}
-      - WALLET_ADDRESS=${WALLET_ADDRESS}
-      - MODE_NETWORK=${MODE_NETWORK}
-      - CROSSMINT_API_KEY=${CROSSMINT_API_KEY}
     depends_on:
       - restack-engine
       - docker-dind
