@@ -222,12 +222,12 @@ async def run_locally(input: RunCodeInput) -> RunCodeOutput:
 
     # We'll gather the same environment variables. If they're non-empty,
     # we create .env so the Dockerfile can pick it up (assuming it COPY .env).
-    env_vars = {
-        "WALLET_PRIVATE_KEY": os.environ.get("WALLET_PRIVATE_KEY", ""),
-        "WALLET_ADDRESS": os.environ.get("WALLET_ADDRESS", ""),
-        "MODE_NETWORK": os.environ.get("MODE_NETWORK", ""),
-        "CROSSMINT_API_KEY": os.environ.get("CROSSMINT_API_KEY", "")
-    }
+    env_vars = {}
+    #     "WALLET_PRIVATE_KEY": os.environ.get("WALLET_PRIVATE_KEY", ""),
+    #     "WALLET_ADDRESS": os.environ.get("WALLET_ADDRESS", ""),
+    #     "MODE_NETWORK": os.environ.get("MODE_NETWORK", ""),
+    #     "CROSSMINT_API_KEY": os.environ.get("CROSSMINT_API_KEY", "")
+    
 
     with tempfile.TemporaryDirectory() as temp_dir:
         # 1) Write out the Dockerfile
