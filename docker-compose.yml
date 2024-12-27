@@ -12,7 +12,7 @@ services:
   docker-dind:
     image: docker:24-dind
     privileged: true
-    command: ["dockerd", "--host=tcp://0.0.0.0:2375", "--tls=false"]
+    command: ["dockerd", "--host=tcp://localhost:2375", "--tls=false"]
     network_mode: host
 
   backend:
