@@ -169,14 +169,14 @@ async def generate_code(input: GenerateCodeInput) -> GenerateCodeOutput:
     log.info("generate_code started", input=input)
 
     # 1) Gather environment variables behind the scenes
-    env_vars = {}
+    #env_vars = {}
         # "WALLET_PRIVATE_KEY": os.environ.get("WALLET_PRIVATE_KEY", ""),
         # "WALLET_ADDRESS": os.environ.get("WALLET_ADDRESS", ""),
         # "MODE_NETWORK": os.environ.get("MODE_NETWORK", ""),
         # "CROSSMINT_API_KEY": os.environ.get("CROSSMINT_API_KEY", "")
 
     # 2) Build a system prompt that tells the LLM about these variables
-    system_message = build_system_message(env_vars)
+    #system_message = build_system_message(env_vars)
 
     # 3) Merge the user prompt with our default instructions
     user_prompt_text = current_generate_code_prompt.format(
